@@ -1,7 +1,7 @@
 # Introducing Alita
 
-If you have ever taken some machine learning class in which neural networks were involved you probably never had to actually build one. There are many good quality
-ones out there that are faster and easier to use than anything one can possibly code up by himself. And yet, ever since I first saw a neural network in action I 
+If you have ever taken some machine learning class that involved neural networks, you probably never had to actually build one. There are many excelent ready-to-use options
+out there that are faster and easier to use than anything one can possibly code up by himself. And yet, ever since I first saw a neural network in action I 
 wanted to try and code one for myself. 
 
 The first time I coded a neural net from scratch I did in Octave. This is an easy way to do it because the matrix operations, the backbone of a neural network, are
