@@ -1,0 +1,3 @@
+﻿  MemoryManager.cpp
+E:\Alita\MemoryManager\MemoryManager.cpp(40,43): warning C4244: '=': conversion from 'double' to 'size_t', possible loss of data
+  MemoryManager.vcxproj -> E:\Alita\MemoryManager\x64\Debug\MemoryManager.exe

@@ -1,0 +1,7 @@
+﻿  main.cpp
+  Source.cpp
+E:\Alita\AlitaCore\Source.cpp(3,30): warning C4091: 'extern ': ignored on left of 'ALITA_CORE_INFO' when no variable is declared
+  Generating Code...
+E:\Alita\AlitaCore\Source.cpp(20): warning C4715: 'DenseForwardF32': not all control paths return a value
+Source.obj : error LNK2019: unresolved external symbol _cublasSgemm_v2@56 referenced in function _DenseForwardF32
+E:\Alita\AlitaCore\Debug\AlitaCore.exe : fatal error LNK1120: 1 unresolved externals
