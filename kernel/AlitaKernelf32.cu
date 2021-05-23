@@ -1,10 +1,14 @@
+//Single precision CUDA kernels
 #include "CommonOp.cuh"
-#include "AlitaCore.h"
-
+#include "Alita.h"
+#include <stdio.h>
+#include <vector>
 #include <math.h>
 
 #define min(a,b) a<b?a:b
 
+
+//One dimensional Kernel, the thread represents the position in the array
 __global__
 void cuda_AddBiasf32(float* target, float* bias,unsigned int targetSize, unsigned int size) {
 
@@ -16,27 +20,33 @@ void cuda_AddBiasf32(float* target, float* bias,unsigned int targetSize, unsigne
 	}
 }
 
+//One dimensional Kernel, the thread represents the position in the array
 __global__
 void cuda_AddBiasf32relu(float* target, float* bias, unsigned int targetSize, unsigned int size) {
 
 	unsigned int index = threadIdx.x + blockIdx.x * blockDim.x;
 	unsigned int stride = blockDim.x * gridDim.x;
 	while (index < size) {
-		if( (target[index] += bias[index % targetSize]) < 0) target[index] = 0;
+		if (bias) {
+			if ((target[index] += bias[index % targetSize]) < 0) target[index] = 0;
+		}
+		else {
+			if (target[index] < 0) target[index] = 0;
+		}
+		
 		index += stride;
 	}
 }
 
+//One dimensional Kernel, the thread represents the position in the array
 __global__
 void cuda_ReluGradf32(float* target, float* src, unsigned int targetSize, unsigned int size) {
 
 	unsigned int index = threadIdx.x + blockIdx.x * blockDim.x;
 	unsigned int stride = blockDim.x * gridDim.x;
 	while (index < size) {
-		if (src[index] > 0) {
-			target[index] *= 1;
-		}
-		else {
+		
+		if (src[index] < 0) {
 			target[index] = 0;
 		}
 		index += stride;
@@ -44,29 +54,33 @@ void cuda_ReluGradf32(float* target, float* src, unsigned int targetSize, unsign
 }
 
 
+//One dimensional Kernel, the thread represents the position in the array
 __global__
 void cuda_AddBiasf32sigmoid(float* target, float* bias, unsigned int targetSize, unsigned int size) {
 
 	unsigned int index = threadIdx.x + blockIdx.x * blockDim.x;
 	unsigned int stride = blockDim.x * gridDim.x;
+
 	while (index < size) {
-		target[index] += bias[index % targetSize];
+		if(bias) target[index] += bias[index % targetSize];
 		target[index] = 1.0 / (1 + exp(-target[index]));
 		index += stride;
 	}
 }
 
+//One dimensional Kernel, the thread represents the position in the array
 __global__
 void cuda_SigmoidGradf32(float* target, float* src, unsigned int targetSize, unsigned int size) {
 
 	unsigned int index = threadIdx.x + blockIdx.x * blockDim.x;
 	unsigned int stride = blockDim.x * gridDim.x;
 	while (index < size) {
-		target[index] = src[index] * (1 - src[index]);
+		target[index] *= src[index] * (1 - src[index]);
 		index += stride;
 	}
 }
 
+//Strided Two dimensional Kernel, the thread.x represent the row and thread.y the column in the matrix; batchSize is the stride
 __global__
 void cuda_DenseWeightGradf32(float* weightsGrad, float* input, float* outputGrad, unsigned int inputSize,
 	unsigned int outputSize, unsigned int batchSize) {
@@ -86,6 +100,7 @@ void cuda_DenseWeightGradf32(float* weightsGrad, float* input, float* outputGrad
 	}
 }
 
+//Strided one dimensional Kernel, the thread represents the position in the array
 __global__
 void cuda_DenseSumOfOutput(float* sumOfOutput, float* outputGrad, unsigned int outputSize, unsigned int batchSize) {
 	unsigned int index = threadIdx.x + blockIdx.x * blockDim.x;
@@ -98,6 +113,7 @@ void cuda_DenseSumOfOutput(float* sumOfOutput, float* outputGrad, unsigned int o
 	}
 }
 
+//Strided one dimensional Kernel, the thread represents the position in the array
 __global__
 void cuda_DenseSumOfWeights(float* sumOfWeights, float* weights, unsigned int inputSize, unsigned int outputSize) {
 	unsigned int index = threadIdx.x + blockIdx.x * blockDim.x;
@@ -109,7 +125,9 @@ void cuda_DenseSumOfWeights(float* sumOfWeights, float* weights, unsigned int in
 	}
 }
 
-__global__ // 2d Kernel - the x dimension represents the input coordinate and the y dimension the batch position
+
+//Two dimensional kernel, thread.x represents the row, thread.y represents the column
+__global__ 
 void cuda_DenseUpdateInputGrad(float* inputGrad, float* sumOfWeights, float* sumOfOutput, unsigned int inputSize,unsigned int batchSize) {
 	unsigned int indexInput = threadIdx.x + blockDim.x * blockIdx.x;
 	unsigned int indexBatch = threadIdx.y + blockDim.y * blockIdx.y;
@@ -158,12 +176,11 @@ cudaError_t Gradf32(float* target, float* src, unsigned int targetSize, unsigned
 	case sigmoid:
 		cuda_SigmoidGradf32 << <nblocks, nThreads >> > (target, src, targetSize, targetSize * batchSize);
 		break;
-		break;
 	case linear:
 		break;
 	}
-	cudaError_t status = cudaGetLastError();
 	cudaDeviceSynchronize();
+	cudaError_t status = cudaGetLastError();
 	return status;
 }
 
@@ -175,6 +192,7 @@ cudaError_t DenseWeightGradf32(
 	float* output, float* outputGrad, float* biasGrad, unsigned int inputSize,unsigned int outputSize, 
 	unsigned int batchSize, float* sumOfOutput,float*sumOfWeights) {
 
+	cudaError_t status;
 	dim3 blocks((inputSize + 31)/32, (outputSize + 31) / 32);
 	
 	dim3 threads(32, 32);
@@ -184,6 +202,14 @@ cudaError_t DenseWeightGradf32(
 	
 	cuda_DenseWeightGradf32 << <blocks, threads,0, streamWeights >> > (weightsGrad, input, outputGrad, inputSize,
 		outputSize, batchSize);
+#ifdef _DEBUG
+	cudaDeviceSynchronize();
+	status = cudaGetLastError();
+	if (status != cudaSuccess) {
+		fprintf(stderr,"Error in Dense Weight grad line %d", __LINE__);
+		return status;
+	}
+#endif
 
 	if (biasGrad) {
 		unsigned int nBLocksBias = (outputSize * batchSize + 31) / 32;
@@ -193,9 +219,17 @@ cudaError_t DenseWeightGradf32(
 		cudaStreamDestroy(streamBias);
 	}
 	
-
+#ifdef _DEBUG
+	cudaDeviceSynchronize();
+	status = cudaGetLastError();
+	if (status != cudaSuccess) {
+		fprintf(stderr, "Bias grad calculation %d", __LINE__);
+		return status;
+	}
+#endif
 
 	if (inputGrad) {
+
 		cudaStream_t stream2, stream3, stream4;
 		cudaStreamCreate(&stream2);
 		cudaStreamCreate(&stream3);
@@ -216,6 +250,14 @@ cudaError_t DenseWeightGradf32(
 		cudaStreamDestroy(stream3);
 		cudaStreamDestroy(stream4);
 
+#ifdef _DEBUG
+		cudaDeviceSynchronize();
+		status = cudaGetLastError();
+		if (status != cudaSuccess) {
+			fprintf(stderr, "Input grad calculation %d", __LINE__);
+			return status;
+		}
+#endif
 		
 	}
 	
