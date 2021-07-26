@@ -1,16 +1,13 @@
 #pragma once
-
-#include "CommonOp.cuh"
 #include "AlitaCore.h"
-
-#include <vector>
+#include "CommonOp.cuh"
 #include "Layer.h"
+#include "Conv2dLayer.h"
+
 
 #define LayersVector std::vector<Layerf32*>
-#include <vector>
-#include "Layer.h"
-
-#define LayersVector std::vector<Layerf32*>
+#define ConvLayersVector std::vector<Conv2dLayerf32*>
 
 
 cudaError_t GradientDescentf32(LayersVector layers, float alpha, float lambda);
+cudaError_t GradientDescentf32(ConvLayersVector layers, float alpha, float lambda);
